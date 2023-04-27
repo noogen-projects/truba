@@ -1,0 +1,9 @@
+[package]
+name = "truba"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }
+typemap = "0.3"
+parking_lot = "0.12"
