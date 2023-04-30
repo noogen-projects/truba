@@ -10,16 +10,22 @@ pub struct MpscChannel<T> {
     receiver: Arc<Mutex<Option<mpsc::Receiver<T>>>>,
 }
 
+impl<T: Send> MpscChannel<T> {
+    pub fn new(buffer: usize) -> Self {
+        let (sender, receiver) = mpsc::channel(buffer);
+        Self {
+            sender: Arc::new(Mutex::new(sender)),
+            receiver: Arc::new(Mutex::new(Some(receiver))),
+        }
+    }
+}
+
 impl<T: Send> Channel for MpscChannel<T> {
     type Sender = mpsc::Sender<T>;
     type Receiver = mpsc::Receiver<T>;
 
     fn create() -> Self {
-        let (sender, receiver) = mpsc::channel(1024);
-        Self {
-            sender: Arc::new(Mutex::new(sender)),
-            receiver: Arc::new(Mutex::new(Some(receiver))),
-        }
+        Self::new(1024)
     }
 
     fn sender(&self) -> Self::Sender {

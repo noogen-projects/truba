@@ -40,11 +40,10 @@ impl MyActor {
 
 #[tokio::main]
 async fn main() {
-    let ctx = Context::new_system();
+    let ctx = Context::default();
     MyActor::run(ctx.clone(), 42);
 
     ctx.sender::<Value>().send(Value(22)).await.ok();
 
-    ctx.shutdown_system();
-    ctx.join_all().await;
+    ctx.shutdown().await;
 }

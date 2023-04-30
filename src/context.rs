@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 use tokio::task::JoinHandle;
 
-use crate::{ActorId, Channel, Message, System, WatchChannel};
+use crate::{ActorId, Channel, Message, System};
 
 #[derive(Clone, Default)]
 pub struct TaskHandles {
@@ -24,13 +24,6 @@ impl TaskHandles {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct SystemShutdown;
-
-impl Message for SystemShutdown {
-    type Channel = WatchChannel<Self>;
-}
-
 #[derive(Clone, Default)]
 pub struct Context {
     system: Arc<Mutex<System>>,
@@ -45,45 +38,48 @@ impl Context {
         }
     }
 
-    pub fn new_system() -> Self {
-        Self::default()
-    }
-
     pub fn spawn<T>(&self, future: T)
     where
         T: Future<Output = ()> + Send + 'static,
     {
         let handle = tokio::spawn(future);
-        let actor_id = self.system.lock().next_actor_id();
+        let actor_id = self.system().next_actor_id();
         self.handles.add(actor_id, handle);
     }
 
+    pub fn sender_of_custom_channel<M: Message>(
+        &self,
+        constructor: impl FnOnce() -> M::Channel,
+    ) -> <M::Channel as Channel>::Sender {
+        self.system().sender_of_custom_channel::<M>(constructor)
+    }
+
+    pub fn receiver_of_custom_channel<M: Message>(
+        &self,
+        constructor: impl FnOnce() -> M::Channel,
+    ) -> <M::Channel as Channel>::Receiver {
+        self.system().receiver_of_custom_channel::<M>(constructor)
+    }
+
     pub fn sender<M: Message>(&self) -> <M::Channel as Channel>::Sender {
-        self.system.lock().sender::<M>()
+        self.system().sender::<M>()
     }
 
     pub fn receiver<M: Message>(&self) -> <M::Channel as Channel>::Receiver {
-        self.system.lock().receiver::<M>()
+        self.system().receiver::<M>()
     }
 
     pub fn extract_channel<M: Message>(&self) -> Option<M::Channel> {
-        self.system.lock().extract_channel::<M>()
+        self.system().extract_channel::<M>()
     }
 
-    pub fn shutdown_system(&self) {
-        self.sender::<SystemShutdown>().send_replace(Some(SystemShutdown));
-        self.system.lock().close_all_channels();
+    pub fn system(&self) -> MutexGuard<'_, System> {
+        self.system.lock()
     }
 
-    pub fn recv_system_shutdown(&self) -> impl Future<Output = bool> {
-        let mut receiver = self.receiver::<SystemShutdown>();
-        async move {
-            if receiver.changed().await.is_ok() {
-                receiver.borrow().is_some()
-            } else {
-                false
-            }
-        }
+    pub async fn shutdown(&self) {
+        self.system().shutdown();
+        self.join_all().await
     }
 
     pub async fn join_all(&self) {
