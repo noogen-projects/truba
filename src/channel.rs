@@ -1,6 +1,7 @@
 pub use self::mpsc::MpscChannel;
 pub use self::watch::WatchChannel;
 
+pub mod broadcast;
 pub mod mpsc;
 pub mod watch;
 
