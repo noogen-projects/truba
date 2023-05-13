@@ -1,6 +1,6 @@
 pub use tokio;
 
-pub use crate::channel::{Channel, Message, MpscChannel, Receiver, Sender, WatchChannel};
+pub use crate::channel::{BroadcastChannel, Channel, Message, MpscChannel, Receiver, Sender, WatchChannel};
 pub use crate::context::Context;
 pub use crate::system::System;
 

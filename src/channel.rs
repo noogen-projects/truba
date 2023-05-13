@@ -1,3 +1,4 @@
+pub use self::broadcast::BroadcastChannel;
 pub use self::mpsc::MpscChannel;
 pub use self::watch::WatchChannel;
 
