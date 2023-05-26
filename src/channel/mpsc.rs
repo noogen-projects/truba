@@ -43,6 +43,12 @@ pub struct UnboundedMpscChannel<T> {
     receiver: Arc<Mutex<Option<mpsc::UnboundedReceiver<T>>>>,
 }
 
+impl<T: Send> Default for UnboundedMpscChannel<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Send> UnboundedMpscChannel<T> {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();

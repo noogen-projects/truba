@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 
+use futures::future;
 use parking_lot::{Mutex, MutexGuard};
 use tokio::task::JoinHandle;
 
@@ -18,9 +19,8 @@ impl TaskHandles {
     }
 
     pub async fn join_all(&self) {
-        for (_, handle) in self.handles.lock().drain() {
-            handle.await.ok();
-        }
+        let handles: Vec<_> = self.handles.lock().drain().map(|(_, handle)| handle).collect();
+        future::join_all(handles).await;
     }
 }
 
