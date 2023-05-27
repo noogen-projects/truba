@@ -24,4 +24,4 @@ pub mod continuous_stream;
 pub mod system;
 
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, PartialEq, Ord, Eq)]
-pub struct ActorId(u64);
+pub struct TaskId(u64);

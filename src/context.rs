@@ -6,15 +6,15 @@ use futures::future;
 use parking_lot::{Mutex, MutexGuard};
 use tokio::task::JoinHandle;
 
-use crate::{ActorId, Channel, Message, System};
+use crate::{Channel, Message, System, TaskId};
 
 #[derive(Clone, Default)]
 pub struct TaskHandles {
-    handles: Arc<Mutex<HashMap<ActorId, JoinHandle<()>>>>,
+    handles: Arc<Mutex<HashMap<TaskId, JoinHandle<()>>>>,
 }
 
 impl TaskHandles {
-    pub fn add(&self, id: ActorId, handle: JoinHandle<()>) {
+    pub fn add(&self, id: TaskId, handle: JoinHandle<()>) {
         self.handles.lock().insert(id, handle);
     }
 
@@ -38,13 +38,14 @@ impl Context {
         }
     }
 
-    pub fn spawn<T>(&self, future: T)
+    pub fn spawn<T>(&self, future: T) -> TaskId
     where
         T: Future<Output = ()> + Send + 'static,
     {
         let handle = tokio::spawn(future);
-        let actor_id = self.system().next_actor_id();
-        self.handles.add(actor_id, handle);
+        let task_id = self.system().next_task_id();
+        self.handles.add(task_id, handle);
+        task_id
     }
 
     pub fn sender_of_custom_channel<M: Message>(

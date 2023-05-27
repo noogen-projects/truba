@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use typemap::{Entry, SendMap};
 
-use crate::{ActorId, Channel, Context, Message, WatchChannel};
+use crate::{Channel, Context, Message, TaskId, WatchChannel};
 
 struct ChannelKey<M>(PhantomData<M>);
 
@@ -19,14 +19,14 @@ impl Message for SystemShutdown {
 }
 
 pub struct System {
-    next_actor_id: ActorId,
+    next_task_id: TaskId,
     channels: SendMap,
 }
 
 impl Default for System {
     fn default() -> Self {
         Self {
-            next_actor_id: ActorId(1),
+            next_task_id: TaskId(1),
             channels: SendMap::custom(),
         }
     }
@@ -69,10 +69,10 @@ impl System {
         self.channels.clear();
     }
 
-    pub fn next_actor_id(&mut self) -> ActorId {
-        let actor_id = self.next_actor_id;
-        self.next_actor_id = ActorId(actor_id.0 + 1);
-        actor_id
+    pub fn next_task_id(&mut self) -> TaskId {
+        let task_id = self.next_task_id;
+        self.next_task_id = TaskId(task_id.0 + 1);
+        task_id
     }
 
     pub fn into_context(self) -> Context {
