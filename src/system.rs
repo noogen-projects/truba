@@ -1,14 +1,48 @@
+use std::collections::HashMap;
 use std::future::Future;
+use std::hash::Hash;
 use std::marker::PhantomData;
 
-use typemap::{Entry, SendMap};
+use typemap::{Entry, Key, SendMap};
 
 use crate::{Channel, Context, Message, TaskId, WatchChannel};
 
 struct ChannelKey<M>(PhantomData<M>);
 
-impl<M: Message> typemap::Key for ChannelKey<M> {
+impl<M: Message> Key for ChannelKey<M> {
     type Value = M::Channel;
+}
+
+struct Channels(SendMap);
+
+impl Default for Channels {
+    fn default() -> Self {
+        Self(SendMap::custom())
+    }
+}
+
+impl Channels {
+    fn sender<M: Message>(&mut self, constructor: impl FnOnce() -> M::Channel) -> <M::Channel as Channel>::Sender {
+        match self.0.entry::<ChannelKey<M>>() {
+            Entry::Occupied(entry) => entry.get().sender(),
+            Entry::Vacant(entry) => entry.insert(constructor()).sender(),
+        }
+    }
+
+    fn receiver<M: Message>(&mut self, constructor: impl FnOnce() -> M::Channel) -> <M::Channel as Channel>::Receiver {
+        match self.0.entry::<ChannelKey<M>>() {
+            Entry::Occupied(entry) => entry.get().receiver(),
+            Entry::Vacant(entry) => entry.insert(constructor()).receiver(),
+        }
+    }
+
+    fn remove<M: Message>(&mut self) -> Option<M::Channel> {
+        self.0.remove::<ChannelKey<M>>()
+    }
+
+    fn clear(&mut self) {
+        self.0.clear()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -18,39 +52,71 @@ impl Message for SystemShutdown {
     type Channel = WatchChannel<Self>;
 }
 
-pub struct System {
+pub struct System<ActorId> {
     next_task_id: TaskId,
-    channels: SendMap,
+    channels: Channels,
+    actor_channels: HashMap<ActorId, Channels>,
 }
 
-impl Default for System {
+impl<ActorId> Default for System<ActorId> {
     fn default() -> Self {
         Self {
             next_task_id: TaskId(1),
-            channels: SendMap::custom(),
+            channels: Default::default(),
+            actor_channels: Default::default(),
         }
     }
 }
 
-impl System {
+impl<ActorId: Eq + Hash> System<ActorId> {
+    pub fn actor_sender_of_custom_channel<M: Message>(
+        &mut self,
+        actor_id: ActorId,
+        constructor: impl FnOnce() -> M::Channel,
+    ) -> <M::Channel as Channel>::Sender {
+        self.actor_channels
+            .entry(actor_id)
+            .or_default()
+            .sender::<M>(constructor)
+    }
+
+    pub fn actor_receiver_of_custom_channel<M: Message>(
+        &mut self,
+        actor_id: ActorId,
+        constructor: impl FnOnce() -> M::Channel,
+    ) -> <M::Channel as Channel>::Receiver {
+        self.actor_channels
+            .entry(actor_id)
+            .or_default()
+            .receiver::<M>(constructor)
+    }
+
+    pub fn actor_sender<M: Message>(&mut self, actor_id: ActorId) -> <M::Channel as Channel>::Sender {
+        self.actor_sender_of_custom_channel::<M>(actor_id, || M::create_channel())
+    }
+
+    pub fn actor_receiver<M: Message>(&mut self, actor_id: ActorId) -> <M::Channel as Channel>::Receiver {
+        self.actor_receiver_of_custom_channel::<M>(actor_id, || M::create_channel())
+    }
+
+    pub fn extract_actor_channel<M: Message>(&mut self, actor_id: &ActorId) -> Option<M::Channel> {
+        self.actor_channels.get_mut(actor_id)?.remove::<M>()
+    }
+}
+
+impl<ActorId> System<ActorId> {
     pub fn sender_of_custom_channel<M: Message>(
         &mut self,
         constructor: impl FnOnce() -> M::Channel,
     ) -> <M::Channel as Channel>::Sender {
-        match self.channels.entry::<ChannelKey<M>>() {
-            Entry::Occupied(entry) => entry.get().sender(),
-            Entry::Vacant(entry) => entry.insert(constructor()).sender(),
-        }
+        self.channels.sender::<M>(constructor)
     }
 
     pub fn receiver_of_custom_channel<M: Message>(
         &mut self,
         constructor: impl FnOnce() -> M::Channel,
     ) -> <M::Channel as Channel>::Receiver {
-        match self.channels.entry::<ChannelKey<M>>() {
-            Entry::Occupied(entry) => entry.get().receiver(),
-            Entry::Vacant(entry) => entry.insert(constructor()).receiver(),
-        }
+        self.channels.receiver::<M>(constructor)
     }
 
     pub fn sender<M: Message>(&mut self) -> <M::Channel as Channel>::Sender {
@@ -62,7 +128,7 @@ impl System {
     }
 
     pub fn extract_channel<M: Message>(&mut self) -> Option<M::Channel> {
-        self.channels.remove::<ChannelKey<M>>()
+        self.channels.remove::<M>()
     }
 
     pub fn close_all_channels(&mut self) {
@@ -75,7 +141,7 @@ impl System {
         task_id
     }
 
-    pub fn into_context(self) -> Context {
+    pub fn into_context(self) -> Context<ActorId> {
         self.into()
     }
 

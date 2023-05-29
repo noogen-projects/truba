@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::future::Future;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use futures::future;
@@ -24,14 +25,30 @@ impl TaskHandles {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct Context {
-    system: Arc<Mutex<System>>,
+pub type DefaultActorId = String;
+pub type DefaultContext = Context<DefaultActorId>;
+
+#[derive(Clone)]
+pub struct Context<ActorId = DefaultActorId> {
+    system: Arc<Mutex<System<ActorId>>>,
     handles: TaskHandles,
 }
 
-impl Context {
-    pub fn new(system: System) -> Self {
+impl<ActorId> Default for Context<ActorId> {
+    fn default() -> Self {
+        Self {
+            system: Default::default(),
+            handles: Default::default(),
+        }
+    }
+}
+
+impl<ActorId> Context<ActorId> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn from_system(system: System<ActorId>) -> Self {
         Self {
             system: Arc::new(Mutex::new(system)),
             handles: Default::default(),
@@ -74,7 +91,7 @@ impl Context {
         self.system().extract_channel::<M>()
     }
 
-    pub fn system(&self) -> MutexGuard<'_, System> {
+    pub fn system(&self) -> MutexGuard<'_, System<ActorId>> {
         self.system.lock()
     }
 
@@ -88,8 +105,97 @@ impl Context {
     }
 }
 
-impl From<System> for Context {
-    fn from(system: System) -> Self {
-        Self::new(system)
+impl<ActorId: Eq + Hash> Context<ActorId> {
+    pub fn actor_sender_of_custom_channel<M: Message>(
+        &self,
+        actor_id: ActorId,
+        constructor: impl FnOnce() -> M::Channel,
+    ) -> <M::Channel as Channel>::Sender {
+        self.system().actor_sender_of_custom_channel::<M>(actor_id, constructor)
+    }
+
+    pub fn actor_receiver_of_custom_channel<M: Message>(
+        &self,
+        actor_id: ActorId,
+        constructor: impl FnOnce() -> M::Channel,
+    ) -> <M::Channel as Channel>::Receiver {
+        self.system()
+            .actor_receiver_of_custom_channel::<M>(actor_id, constructor)
+    }
+
+    pub fn actor_sender<M: Message>(&self, actor_id: ActorId) -> <M::Channel as Channel>::Sender {
+        self.system().actor_sender::<M>(actor_id)
+    }
+
+    pub fn actor_receiver<M: Message>(&self, actor_id: ActorId) -> <M::Channel as Channel>::Receiver {
+        self.system().actor_receiver::<M>(actor_id)
+    }
+
+    pub fn extract_actor_channel<M: Message>(&self, actor_id: &ActorId) -> Option<M::Channel> {
+        self.system().extract_actor_channel::<M>(actor_id)
+    }
+}
+
+impl<ActorId> From<System<ActorId>> for Context<ActorId> {
+    fn from(system: System<ActorId>) -> Self {
+        Self::from_system(system)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::sync::mpsc::error::SendError;
+
+    use crate::{Context, Message, MpscChannel};
+
+    struct Value(&'static str);
+
+    impl Message for Value {
+        type Channel = MpscChannel<Self>;
+    }
+
+    #[tokio::test]
+    async fn actor_channels() {
+        let ctx = Context::<usize>::new();
+
+        let sender = ctx.sender::<Value>();
+        let mut receiver = ctx.receiver::<Value>();
+
+        sender.send(Value("common")).await.ok().unwrap();
+        assert_eq!(receiver.recv().await.unwrap().0, "common");
+
+        let actor_sender = ctx.actor_sender::<Value>(1);
+        let mut actor_receiver = ctx.actor_receiver::<Value>(1);
+
+        sender.send(Value("common")).await.ok().unwrap();
+        actor_sender.send(Value("actor")).await.ok().unwrap();
+
+        assert_eq!(receiver.recv().await.unwrap().0, "common");
+        assert_eq!(actor_receiver.recv().await.unwrap().0, "actor");
+
+        let (extracted_actor_sender, _) = ctx.extract_actor_channel::<Value>(&1).unwrap().into_inner();
+
+        extracted_actor_sender
+            .send(Value("extracted actor"))
+            .await
+            .ok()
+            .unwrap();
+
+        assert!(receiver.try_recv().is_err());
+        assert_eq!(actor_receiver.recv().await.unwrap().0, "extracted actor");
+
+        drop(actor_receiver);
+
+        assert!(matches!(
+            actor_sender.send(Value("actor closed")).await,
+            Err(SendError(Value("actor closed")))
+        ));
+        assert!(matches!(
+            extracted_actor_sender.send(Value("actor closed")).await,
+            Err(SendError(Value("actor closed")))
+        ));
+
+        sender.send(Value("common")).await.ok().unwrap();
+        assert_eq!(receiver.recv().await.unwrap().0, "common");
     }
 }

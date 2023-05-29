@@ -31,7 +31,7 @@ impl MyActor {
 
 #[tokio::main]
 async fn main() {
-    let ctx = Context::default();
+    let ctx = Context::new();
     MyActor::run(ctx.clone(), 42);
 
     {

@@ -11,13 +11,21 @@ pub struct MpscChannel<T> {
     receiver: Arc<Mutex<Option<mpsc::Receiver<T>>>>,
 }
 
-impl<T: Send> MpscChannel<T> {
+impl<T> MpscChannel<T> {
     pub fn new(buffer: usize) -> Self {
         let (sender, receiver) = mpsc::channel(buffer);
         Self {
             sender: Arc::new(Mutex::new(sender)),
             receiver: Arc::new(Mutex::new(Some(receiver))),
         }
+    }
+
+    pub fn into_inner(self) -> (mpsc::Sender<T>, Option<mpsc::Receiver<T>>) {
+        let (sender, receiver) = mpsc::channel(1);
+        (
+            mem::replace(&mut *self.sender.lock(), sender),
+            mem::replace(&mut *self.receiver.lock(), Some(receiver)),
+        )
     }
 }
 
@@ -91,7 +99,7 @@ impl<T: Send> Channel for UnboundedMpscChannel<T> {
 mod tests {
     use tokio::sync::mpsc::error::SendError;
 
-    use crate::{Context, Message, UnboundedMpscChannel};
+    use crate::{DefaultContext, Message, UnboundedMpscChannel};
 
     #[tokio::test]
     async fn extract_unbounded_channel() {
@@ -101,7 +109,7 @@ mod tests {
             type Channel = UnboundedMpscChannel<Self>;
         }
 
-        let ctx = Context::default();
+        let ctx = DefaultContext::new();
 
         assert!(matches!(ctx.extract_channel::<Value>(), None));
 
