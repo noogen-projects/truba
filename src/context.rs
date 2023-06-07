@@ -65,6 +65,14 @@ impl<ActorId> Context<ActorId> {
         task_id
     }
 
+    pub fn extract_channel<M: Message>(&self) -> Option<M::Channel> {
+        self.system().extract_channel::<M>()
+    }
+
+    pub fn get_sender<M: Message>(&self) -> Option<<M::Channel as Channel>::Sender> {
+        self.system().get_channel::<M>().map(|channel| channel.sender())
+    }
+
     pub fn sender_of_custom_channel<M: Message>(
         &self,
         constructor: impl FnOnce() -> M::Channel,
@@ -87,10 +95,6 @@ impl<ActorId> Context<ActorId> {
         self.system().receiver::<M>()
     }
 
-    pub fn extract_channel<M: Message>(&self) -> Option<M::Channel> {
-        self.system().extract_channel::<M>()
-    }
-
     pub fn system(&self) -> MutexGuard<'_, System<ActorId>> {
         self.system.lock()
     }
@@ -106,6 +110,16 @@ impl<ActorId> Context<ActorId> {
 }
 
 impl<ActorId: Eq + Hash> Context<ActorId> {
+    pub fn extract_actor_channel<M: Message>(&self, actor_id: &ActorId) -> Option<M::Channel> {
+        self.system().extract_actor_channel::<M>(actor_id)
+    }
+
+    pub fn get_actor_sender<M: Message>(&self, actor_id: &ActorId) -> Option<<M::Channel as Channel>::Sender> {
+        self.system()
+            .get_actor_channel::<M>(actor_id)
+            .map(|channel| channel.sender())
+    }
+
     pub fn actor_sender_of_custom_channel<M: Message>(
         &self,
         actor_id: ActorId,
@@ -129,10 +143,6 @@ impl<ActorId: Eq + Hash> Context<ActorId> {
 
     pub fn actor_receiver<M: Message>(&self, actor_id: ActorId) -> <M::Channel as Channel>::Receiver {
         self.system().actor_receiver::<M>(actor_id)
-    }
-
-    pub fn extract_actor_channel<M: Message>(&self, actor_id: &ActorId) -> Option<M::Channel> {
-        self.system().extract_actor_channel::<M>(actor_id)
     }
 }
 

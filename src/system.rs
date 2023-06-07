@@ -36,6 +36,10 @@ impl Channels {
         }
     }
 
+    fn get<M: Message>(&self) -> Option<&M::Channel> {
+        self.0.get::<ChannelKey<M>>()
+    }
+
     fn remove<M: Message>(&mut self) -> Option<M::Channel> {
         self.0.remove::<ChannelKey<M>>()
     }
@@ -69,6 +73,14 @@ impl<ActorId> Default for System<ActorId> {
 }
 
 impl<ActorId: Eq + Hash> System<ActorId> {
+    pub fn get_actor_channel<M: Message>(&self, actor_id: &ActorId) -> Option<&M::Channel> {
+        self.actor_channels.get(actor_id)?.get::<M>()
+    }
+
+    pub fn extract_actor_channel<M: Message>(&mut self, actor_id: &ActorId) -> Option<M::Channel> {
+        self.actor_channels.get_mut(actor_id)?.remove::<M>()
+    }
+
     pub fn actor_sender_of_custom_channel<M: Message>(
         &mut self,
         actor_id: ActorId,
@@ -98,13 +110,17 @@ impl<ActorId: Eq + Hash> System<ActorId> {
     pub fn actor_receiver<M: Message>(&mut self, actor_id: ActorId) -> <M::Channel as Channel>::Receiver {
         self.actor_receiver_of_custom_channel::<M>(actor_id, || M::create_channel())
     }
-
-    pub fn extract_actor_channel<M: Message>(&mut self, actor_id: &ActorId) -> Option<M::Channel> {
-        self.actor_channels.get_mut(actor_id)?.remove::<M>()
-    }
 }
 
 impl<ActorId> System<ActorId> {
+    pub fn get_channel<M: Message>(&self) -> Option<&M::Channel> {
+        self.channels.get::<M>()
+    }
+
+    pub fn extract_channel<M: Message>(&mut self) -> Option<M::Channel> {
+        self.channels.remove::<M>()
+    }
+
     pub fn sender_of_custom_channel<M: Message>(
         &mut self,
         constructor: impl FnOnce() -> M::Channel,
@@ -125,10 +141,6 @@ impl<ActorId> System<ActorId> {
 
     pub fn receiver<M: Message>(&mut self) -> <M::Channel as Channel>::Receiver {
         self.receiver_of_custom_channel::<M>(|| M::create_channel())
-    }
-
-    pub fn extract_channel<M: Message>(&mut self) -> Option<M::Channel> {
-        self.channels.remove::<M>()
     }
 
     pub fn close_all_channels(&mut self) {

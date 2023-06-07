@@ -8,12 +8,19 @@ pub use crate::continuous_stream::ContinuousStream;
 pub use crate::system::System;
 
 #[macro_export]
+macro_rules! event_loop {
+    ($($select: tt)*) => {
+        loop {
+            $crate::tokio::select! $($select)*
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! spawn_event_loop {
     ($ctx: expr, $($select: tt)*) => {
         $ctx.spawn(async move {
-            loop {
-                $crate::tokio::select! $($select)*
-            }
+            $crate::event_loop!($($select)*)
         })
     };
 }
