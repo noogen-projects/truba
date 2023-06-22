@@ -3,7 +3,7 @@ use std::future::Future;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use typemap::{Entry, Key, SendMap};
+use typemap_ors::{Entry, Key, SendMap};
 
 use crate::{Channel, Context, Message, TaskId, WatchChannel};
 
