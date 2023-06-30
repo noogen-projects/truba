@@ -15,7 +15,7 @@ impl MyActor {
         let mut value_in = ctx.receiver::<Value>();
         let mut actor = MyActor { value };
 
-        truba::spawn_min_event_loop!(ctx, {
+        truba::spawn_event_loop!(ctx, {
             Some(msg) = value_in.recv() => {
                 actor.handle_value(msg);
             },
@@ -36,4 +36,6 @@ async fn main() {
     let sender = ctx.sender::<Value>();
     sender.send(Value(11)).await.ok();
     sender.send(Value(22)).await.ok();
+
+    ctx.shutdown().await;
 }

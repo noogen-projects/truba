@@ -8,7 +8,7 @@ pub use crate::continuous_stream::ContinuousStream;
 pub use crate::system::System;
 
 #[macro_export]
-macro_rules! event_loop {
+macro_rules! raw_event_loop {
     ($($select: tt)*) => {
         loop {
             $crate::tokio::select! $($select)*
@@ -17,10 +17,58 @@ macro_rules! event_loop {
 }
 
 #[macro_export]
-macro_rules! spawn_event_loop {
+macro_rules! min_event_loop {
+    ({ $($select: tt)* }) => {
+        loop {
+            $crate::tokio::select! { $($select)* else => break }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! event_loop {
+    ($ctx: expr, { $($select: tt)* }) => {{
+        let mut crate__shutdown_in_ = $ctx.receiver::<$crate::system::SystemShutdown>();
+        drop($ctx);
+
+        $crate::min_event_loop!({
+            biased;
+            $($select)*
+            Ok(_) = crate__shutdown_in_.changed() => {
+                if let Some($crate::system::SystemShutdown) = *crate__shutdown_in_.borrow() {
+                    break
+                }
+            },
+        })
+    }};
+}
+
+#[macro_export]
+macro_rules! spawn_raw_event_loop {
     ($ctx: expr, $($select: tt)*) => {
         $ctx.spawn(async move {
-            $crate::event_loop!($($select)*)
+            $crate::raw_event_loop!($($select)*)
+        })
+    };
+}
+
+#[macro_export]
+macro_rules! spawn_min_event_loop {
+    ($ctx: expr, { $($select: tt)* }) => {
+        $ctx.spawn(async move {
+            $crate::min_event_loop!({ $($select)* })
+        })
+    };
+}
+
+#[macro_export]
+macro_rules! spawn_event_loop {
+    ($ctx: expr, { $($select: tt)* }) => {
+        $ctx.clone().spawn(async move {
+            $crate::event_loop!(
+                $ctx,
+                { $($select)* }
+            )
         })
     };
 }

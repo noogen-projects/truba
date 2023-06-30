@@ -170,6 +170,5 @@ impl<ActorId> System<ActorId> {
 
     pub fn shutdown(&mut self) {
         self.sender::<SystemShutdown>().send_replace(Some(SystemShutdown));
-        self.close_all_channels();
     }
 }
