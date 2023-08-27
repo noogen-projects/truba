@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::future::Future;
 use std::hash::Hash;
 use std::sync::Arc;
@@ -136,7 +137,9 @@ impl<ActorId: Eq + Hash> Context<ActorId> {
         self.system()
             .actor_receiver_of_custom_channel::<M>(actor_id, constructor)
     }
+}
 
+impl<ActorId: Eq + Hash + fmt::Display> Context<ActorId> {
     pub fn actor_sender<M: Message>(&self, actor_id: ActorId) -> <M::Channel as Channel>::Sender {
         self.system().actor_sender::<M>(actor_id)
     }

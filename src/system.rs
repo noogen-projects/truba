@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::future::Future;
 use std::hash::Hash;
 use std::marker::PhantomData;
@@ -102,13 +103,17 @@ impl<ActorId: Eq + Hash> System<ActorId> {
             .or_default()
             .receiver::<M>(constructor)
     }
+}
 
+impl<ActorId: Eq + Hash + fmt::Display> System<ActorId> {
     pub fn actor_sender<M: Message>(&mut self, actor_id: ActorId) -> <M::Channel as Channel>::Sender {
-        self.actor_sender_of_custom_channel::<M>(actor_id, || M::create_channel())
+        let string_actor_id = actor_id.to_string();
+        self.actor_sender_of_custom_channel::<M>(actor_id, || M::create_actor_channel(string_actor_id))
     }
 
     pub fn actor_receiver<M: Message>(&mut self, actor_id: ActorId) -> <M::Channel as Channel>::Receiver {
-        self.actor_receiver_of_custom_channel::<M>(actor_id, || M::create_channel())
+        let string_actor_id = actor_id.to_string();
+        self.actor_receiver_of_custom_channel::<M>(actor_id, || M::create_actor_channel(string_actor_id))
     }
 }
 

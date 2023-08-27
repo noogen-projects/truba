@@ -11,7 +11,16 @@ pub trait Channel: Send {
     type Receiver;
 
     fn create() -> Self;
+
+    fn actor_create(_actor_id: String) -> Self
+    where
+        Self: Sized,
+    {
+        Self::create()
+    }
+
     fn sender(&self) -> Self::Sender;
+
     fn receiver(&self) -> Self::Receiver;
 }
 
@@ -20,6 +29,10 @@ pub trait Message: 'static {
 
     fn create_channel() -> Self::Channel {
         Self::Channel::create()
+    }
+
+    fn create_actor_channel(actor_id: String) -> Self::Channel {
+        Self::Channel::actor_create(actor_id)
     }
 }
 
