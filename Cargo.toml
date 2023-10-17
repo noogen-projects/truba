@@ -1,6 +1,6 @@
 [package]
 name = "truba"
-version = "0.1.3"
+version = "0.1.4"
 authors = [
     "Alexander Mescheryakov <freecoder.xx@gmail.com>",
 ]
@@ -14,6 +14,6 @@ categories = ["asynchronous"]
 
 [dependencies]
 futures = "0.3"
+parking_lot = "0.12"
 tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }
 typemap-ors = "1.0"
-parking_lot = "0.12"
