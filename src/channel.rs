@@ -22,6 +22,8 @@ pub trait Channel: Send {
     fn sender(&self) -> Self::Sender;
 
     fn receiver(&self) -> Self::Receiver;
+
+    fn is_closed(&self) -> bool;
 }
 
 pub trait Message: 'static {

@@ -33,4 +33,8 @@ impl<T: Send + Clone> Channel for BroadcastChannel<T> {
     fn receiver(&self) -> Self::Receiver {
         self.sender.lock().subscribe()
     }
+
+    fn is_closed(&self) -> bool {
+        false
+    }
 }

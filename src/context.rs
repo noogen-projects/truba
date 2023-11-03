@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use futures::future;
 use parking_lot::{Mutex, MutexGuard};
-use tokio::task::JoinHandle;
+use tokio::task::{JoinError, JoinHandle};
 
 use crate::{Channel, Message, System, TaskId};
 
@@ -18,6 +18,26 @@ pub struct TaskHandles {
 impl TaskHandles {
     pub fn add(&self, id: TaskId, handle: JoinHandle<()>) {
         self.handles.lock().insert(id, handle);
+    }
+
+    pub fn remove(&self, id: &TaskId) -> Option<JoinHandle<()>> {
+        self.handles.lock().remove(id)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.handles.lock().is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.handles.lock().len()
+    }
+
+    pub async fn join(&self, id: &TaskId) -> Result<(), JoinError> {
+        if let Some(handle) = self.remove(id) {
+            handle.await
+        } else {
+            Ok(())
+        }
     }
 
     pub async fn join_all(&self) {
@@ -60,8 +80,12 @@ impl<ActorId> Context<ActorId> {
     where
         T: Future<Output = ()> + Send + 'static,
     {
-        let handle = tokio::spawn(future);
         let task_id = self.system().next_task_id();
+        let handles = self.handles.clone();
+        let handle = tokio::spawn(async move {
+            future.await;
+            handles.remove(&task_id);
+        });
         self.handles.add(task_id, handle);
         task_id
     }
@@ -96,6 +120,10 @@ impl<ActorId> Context<ActorId> {
         self.system().receiver::<M>()
     }
 
+    pub fn is_channel_closed<M: Message>(&self) -> Option<bool> {
+        self.system().get_channel::<M>().map(|channel| channel.is_closed())
+    }
+
     pub fn system(&self) -> MutexGuard<'_, System<ActorId>> {
         self.system.lock()
     }
@@ -107,6 +135,14 @@ impl<ActorId> Context<ActorId> {
 
     pub async fn join_all(&self) {
         self.handles.join_all().await
+    }
+
+    pub async fn join(&self, id: &TaskId) -> Result<(), JoinError> {
+        self.handles.join(id).await
+    }
+
+    pub fn handles(&self) -> &TaskHandles {
+        &self.handles
     }
 }
 
@@ -140,12 +176,12 @@ impl<ActorId: Eq + Hash> Context<ActorId> {
 }
 
 impl<ActorId: Eq + Hash + fmt::Display> Context<ActorId> {
-    pub fn actor_sender<M: Message>(&self, actor_id: ActorId) -> <M::Channel as Channel>::Sender {
-        self.system().actor_sender::<M>(actor_id)
+    pub fn actor_sender<M: Message>(&self, actor_id: impl Into<ActorId>) -> <M::Channel as Channel>::Sender {
+        self.system().actor_sender::<M>(actor_id.into())
     }
 
-    pub fn actor_receiver<M: Message>(&self, actor_id: ActorId) -> <M::Channel as Channel>::Receiver {
-        self.system().actor_receiver::<M>(actor_id)
+    pub fn actor_receiver<M: Message>(&self, actor_id: impl Into<ActorId>) -> <M::Channel as Channel>::Receiver {
+        self.system().actor_receiver::<M>(actor_id.into())
     }
 }
 
@@ -169,7 +205,7 @@ mod tests {
 
     #[tokio::test]
     async fn actor_channels() {
-        let ctx = Context::<usize>::new();
+        let ctx = Context::<i32>::new();
 
         let sender = ctx.sender::<Value>();
         let mut receiver = ctx.receiver::<Value>();

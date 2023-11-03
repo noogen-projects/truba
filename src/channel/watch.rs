@@ -29,4 +29,8 @@ impl<T: Send + Sync> Channel for WatchChannel<T> {
     fn receiver(&self) -> Self::Receiver {
         self.receiver.lock().clone()
     }
+
+    fn is_closed(&self) -> bool {
+        self.receiver.lock().has_changed().is_err()
+    }
 }

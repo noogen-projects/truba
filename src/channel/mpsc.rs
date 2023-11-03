@@ -44,6 +44,10 @@ impl<T: Send> Channel for MpscChannel<T> {
     fn receiver(&self) -> Self::Receiver {
         self.receiver.lock().take().unwrap_or_else(|| mpsc::channel(1).1)
     }
+
+    fn is_closed(&self) -> bool {
+        self.sender.lock().is_closed()
+    }
 }
 
 pub struct UnboundedMpscChannel<T> {
@@ -92,6 +96,10 @@ impl<T: Send> Channel for UnboundedMpscChannel<T> {
             .lock()
             .take()
             .unwrap_or_else(|| mpsc::unbounded_channel().1)
+    }
+
+    fn is_closed(&self) -> bool {
+        self.sender.lock().is_closed()
     }
 }
 

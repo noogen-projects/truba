@@ -25,14 +25,40 @@ impl Default for Channels {
 impl Channels {
     fn sender<M: Message>(&mut self, constructor: impl FnOnce() -> M::Channel) -> <M::Channel as Channel>::Sender {
         match self.0.entry::<ChannelKey<M>>() {
-            Entry::Occupied(entry) => entry.get().sender(),
+            Entry::Occupied(entry) => {
+                let channel = entry.get();
+                let sender = channel.sender();
+
+                if !channel.is_closed() {
+                    sender
+                } else {
+                    self.0.insert::<ChannelKey<M>>(constructor());
+                    self.0
+                        .get::<ChannelKey<M>>()
+                        .expect("always present, just added before")
+                        .sender()
+                }
+            },
             Entry::Vacant(entry) => entry.insert(constructor()).sender(),
         }
     }
 
     fn receiver<M: Message>(&mut self, constructor: impl FnOnce() -> M::Channel) -> <M::Channel as Channel>::Receiver {
         match self.0.entry::<ChannelKey<M>>() {
-            Entry::Occupied(entry) => entry.get().receiver(),
+            Entry::Occupied(entry) => {
+                let channel = entry.get();
+                let receiver = channel.receiver();
+
+                if !channel.is_closed() {
+                    receiver
+                } else {
+                    self.0.insert::<ChannelKey<M>>(constructor());
+                    self.0
+                        .get::<ChannelKey<M>>()
+                        .expect("always present, just added before")
+                        .receiver()
+                }
+            },
             Entry::Vacant(entry) => entry.insert(constructor()).receiver(),
         }
     }

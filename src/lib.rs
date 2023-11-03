@@ -28,19 +28,32 @@ macro_rules! min_event_loop {
 #[macro_export]
 macro_rules! event_loop {
     ($ctx: expr, { $($select: tt)* }) => {{
-        #[allow(non_snake_case)]
-        let mut crate__shutdown_in_ = $ctx.receiver::<$crate::system::SystemShutdown>();
-        drop($ctx);
+        // If shutdown channel exist and close
+        if $ctx.is_channel_closed::<$crate::system::SystemShutdown>().unwrap_or(false) {
+            drop($ctx);
 
-        $crate::min_event_loop!({
-            biased;
-            $($select)*
-            Ok(_) = crate__shutdown_in_.changed() => {
-                if let Some($crate::system::SystemShutdown) = *crate__shutdown_in_.borrow() {
-                    break
-                }
-            },
-        })
+            for _ in 0..1 {
+                $crate::tokio::select! {
+                    biased;
+                    $($select)*
+                    else => break
+                };
+            }
+        } else {
+            #[allow(non_snake_case)]
+            let mut crate__shutdown_in_ = $ctx.receiver::<$crate::system::SystemShutdown>();
+            drop($ctx);
+
+            $crate::min_event_loop!({
+                biased;
+                $($select)*
+                Ok(_) = crate__shutdown_in_.changed() => {
+                    if let Some($crate::system::SystemShutdown) = *crate__shutdown_in_.borrow() {
+                        break
+                    }
+                },
+            });
+        }
     }};
 }
 
