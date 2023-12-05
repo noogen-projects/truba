@@ -50,3 +50,5 @@ async fn main() {
     ctx.shutdown().await;
 }
 ```
+
+This and more examples you can find in the [examples](examples/) directory.
