@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt;
 use std::future::Future;
@@ -183,6 +184,12 @@ impl<ActorId: Eq + Hash + fmt::Display> Context<ActorId> {
     pub fn actor_receiver<M: Message>(&self, actor_id: impl Into<ActorId>) -> <M::Channel as Channel>::Receiver {
         self.system().actor_receiver::<M>(actor_id.into())
     }
+
+    pub fn is_actor_channel_closed<M: Message>(&self, actor_id: impl Borrow<ActorId>) -> Option<bool> {
+        self.system()
+            .get_actor_channel::<M>(actor_id.borrow())
+            .map(|channel| channel.is_closed())
+    }
 }
 
 impl<ActorId> From<System<ActorId>> for Context<ActorId> {
@@ -246,5 +253,19 @@ mod tests {
 
         sender.send(Value("common")).await.ok().unwrap();
         assert_eq!(receiver.recv().await.unwrap().0, "common");
+    }
+
+    #[tokio::test]
+    async fn close_actor_channel_by_drop() {
+        let ctx = Context::<i32>::new();
+        let actor_sender = ctx.actor_sender::<Value>(1);
+        let mut actor_receiver = ctx.actor_receiver::<Value>(1);
+
+        actor_sender.send(Value("test")).await.ok().unwrap();
+        assert_eq!(actor_receiver.recv().await.unwrap().0, "test");
+
+        assert!(!ctx.is_actor_channel_closed::<Value>(1_i32).unwrap_or(true));
+        drop(actor_receiver);
+        assert!(ctx.is_actor_channel_closed::<Value>(1_i32).unwrap_or(true));
     }
 }

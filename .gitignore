@@ -1,7 +1,4 @@
 **/target/
 Cargo.lock
 
-.idea
-*.iml
-
 TODO.md

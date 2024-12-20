@@ -7,7 +7,7 @@ The minimal tokio runtime based actors for Rust.
 truba = "0.1"
 ```
 
-```rust
+```rust no_run
 use truba::{Context, Message, MpscChannel};
 
 struct Value(u32);

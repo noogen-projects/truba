@@ -12,7 +12,7 @@ pub trait Channel: Send {
 
     fn create() -> Self;
 
-    fn actor_create(_actor_id: String) -> Self
+    fn actor_create(_actor_id: impl Into<String>) -> Self
     where
         Self: Sized,
     {
@@ -33,7 +33,7 @@ pub trait Message: 'static {
         Self::Channel::create()
     }
 
-    fn create_actor_channel(actor_id: String) -> Self::Channel {
+    fn create_actor_channel(actor_id: impl Into<String>) -> Self::Channel {
         Self::Channel::actor_create(actor_id)
     }
 }
